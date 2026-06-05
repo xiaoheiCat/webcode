@@ -1,0 +1,8 @@
+# Build cache
+.cache/
+
+# Generated output
+dist/
+
+# macOS
+.DS_Store

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{{PRODUCT_NAME}}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      height: 100dvh;
+      overflow: hidden;
+      background: #000;
+      touch-action: manipulation;
+    }
+    #terminal {
+      width: 100%;
+      height: 100%;
+      height: 100dvh;
+    }
+    @supports (-webkit-touch-callout: none) {
+      html, body, #terminal { height: -webkit-fill-available; }
+    }
+  </style>
+</head>
+<body>
+  <div id="terminal"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-pty@0.9.4/index.js"></script>
+  <script src="./stack.js"></script>
+  <script>
+    (function () {
+      var base = new URL(".", location.href).href;
+      var wasmUrl = base + "out.wasm";
+      var proxyWasmUrl = base + "c2w-net-proxy.wasm";
+
+      var xterm = new Terminal({
+        cursorBlink: true,
+        fontSize: 14,
+        fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+        theme: { background: "#000000" },
+        scrollback: 10000,
+      });
+      var fitAddon = new FitAddon.FitAddon();
+      xterm.loadAddon(fitAddon);
+      xterm.open(document.getElementById("terminal"));
+
+      function fitTerminal() {
+        try { fitAddon.fit(); } catch (e) {}
+      }
+      fitTerminal();
+      window.addEventListener("resize", fitTerminal);
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener("resize", fitTerminal);
+        window.visualViewport.addEventListener("scroll", fitTerminal);
+      }
+
+      var pty = openpty();
+      var master = pty.master;
+      var slave = pty.slave;
+
+      var termios = slave.ioctl("TCGETS");
+      termios.iflag &= ~(ISTRIP | INLCR | IGNCR | ICRNL | IXON);
+      termios.oflag &= ~(OPOST);
+      termios.lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
+      slave.ioctl("TCSETS", new Termios(termios.iflag, termios.oflag, termios.cflag, termios.lflag, termios.cc));
+      xterm.loadAddon(master);
+
+      var worker = new Worker(new URL("./worker.js", location.href));
+      var stackWorker = new Worker(new URL("./stack-worker.js", location.href));
+      var nwStack = newStack(worker, wasmUrl, stackWorker, proxyWasmUrl);
+      new TtyServer(slave).start(worker, nwStack);
+
+      xterm.focus();
+      document.addEventListener("click", function () { xterm.focus(); });
+    })();
+  </script>
+</body>
+</html>
