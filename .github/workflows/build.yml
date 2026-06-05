@@ -17,6 +17,9 @@ concurrency:
 permissions:
   contents: write
 
+env:
+  C2W_VERSION: v0.8.4
+
 jobs:
   prepare:
     runs-on: ubuntu-24.04
@@ -25,27 +28,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: docker/setup-buildx-action@v3
-
-      - name: Build shared deps
-        env:
-          DOCKER_BUILDKIT: 1
-          C2W_VERSION: v0.8.4
-        run: bash scripts/build-dist.sh deps
-
       - name: Set build matrix
         id: set-matrix
         run: echo "matrix=$(bash scripts/build-dist.sh matrix)" >> "$GITHUB_OUTPUT"
 
-      - name: Upload build deps
-        uses: actions/upload-artifact@v4
+  deps:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Restore build deps cache
+        uses: actions/cache@v4
         with:
-          name: build-deps
-          path: .cache/
-          retention-days: 1
+          path: .cache
+          key: webcode-deps-${{ env.C2W_VERSION }}-${{ hashFiles('web/shim/Dockerfile', 'web/shim/**') }}
+          restore-keys: |
+            webcode-deps-${{ env.C2W_VERSION }}-
+
+      - name: Build shared deps
+        env:
+          DOCKER_BUILDKIT: 1
+        run: bash scripts/build-dist.sh deps
 
   build:
-    needs: prepare
+    needs: [prepare, deps]
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -55,16 +63,17 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      - name: Download build deps
-        uses: actions/download-artifact@v4
+      - name: Restore build deps cache
+        uses: actions/cache@v4
         with:
-          name: build-deps
-          path: .
+          path: .cache
+          key: webcode-deps-${{ env.C2W_VERSION }}-${{ hashFiles('web/shim/Dockerfile', 'web/shim/**') }}
+          restore-keys: |
+            webcode-deps-${{ env.C2W_VERSION }}-
 
       - name: Build product
         env:
           DOCKER_BUILDKIT: 1
-          C2W_VERSION: v0.8.4
         run: |
           bash scripts/build-dist.sh product \
             "${{ matrix.id }}" \
@@ -76,6 +85,7 @@ jobs:
         with:
           name: product-${{ matrix.id }}
           path: dist/${{ matrix.id }}/
+          if-no-files-found: error
           retention-days: 1
 
   merge:
