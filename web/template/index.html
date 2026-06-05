@@ -101,6 +101,8 @@
         var nwStack = newStack(worker, wasmUrl, stackWorker, proxyWasmUrl);
         new TtyServer(slave).start(worker, nwStack);
 
+        WebCodeBoot.enableVmUnloadGuard();
+
         xterm.focus();
         document.addEventListener("click", function () { xterm.focus(); });
       },

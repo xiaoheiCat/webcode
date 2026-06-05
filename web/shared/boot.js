@@ -47,6 +47,27 @@
     });
   }
 
+  var vmUnloadGuardEnabled = false;
+
+  function onBeforeUnload(e) {
+    if (!vmUnloadGuardEnabled) return;
+    e.preventDefault();
+    e.returnValue = "";
+    return "";
+  }
+
+  function enableVmUnloadGuard() {
+    if (vmUnloadGuardEnabled) return;
+    vmUnloadGuardEnabled = true;
+    window.addEventListener("beforeunload", onBeforeUnload);
+  }
+
+  function disableVmUnloadGuard() {
+    if (!vmUnloadGuardEnabled) return;
+    vmUnloadGuardEnabled = false;
+    window.removeEventListener("beforeunload", onBeforeUnload);
+  }
+
   function fetchWithProgress(url, onItemProgress) {
     return fetch(url, { credentials: "same-origin" }).then(function (resp) {
       if (!resp.ok) {
@@ -153,6 +174,7 @@
               yesLabel: "重试",
               noLabel: "返回",
             }).then(function (ok) {
+              disableVmUnloadGuard();
               if (ok) location.reload();
               else location.href = "/";
             });
@@ -161,6 +183,7 @@
       })
       .catch(function (err) {
         if (err && err.message === "cancelled") {
+          disableVmUnloadGuard();
           location.href = "/";
         }
         throw err;
@@ -183,9 +206,11 @@
         flushCaches(opts.scope).then(function () {
           loading.setProgress(100);
           loading.close();
+          disableVmUnloadGuard();
           location.href = opts.redirect || "/";
         });
       } else {
+        disableVmUnloadGuard();
         location.href = opts.redirect || "/";
       }
     });
@@ -196,6 +221,8 @@
     registerServiceWorker: registerServiceWorker,
     flushCaches: flushCaches,
     preloadAssets: preloadAssets,
+    enableVmUnloadGuard: enableVmUnloadGuard,
+    disableVmUnloadGuard: disableVmUnloadGuard,
     start: start,
     flushPage: flushPage,
   };
