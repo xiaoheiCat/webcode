@@ -31,7 +31,7 @@ install_c2w() {
   fi
   local tarball="container2wasm-${C2W_VERSION}-linux-${C2W_ARCH}.tar.gz"
   local url="https://github.com/${C2W_REPO}/releases/download/${C2W_VERSION}/${tarball}"
-  echo "Downloading c2w ${C2W_VERSION} (${C2W_ARCH})..."
+  echo "Downloading c2w ${C2W_VERSION} (${C2W_ARCH})..." >&2
   curl -fsSL "$url" | tar -xz -C "$bin_dir"
   chmod +x "$bin_dir/c2w" "$bin_dir/c2w-net"
   export PATH="$bin_dir:$PATH"
@@ -44,7 +44,7 @@ download_net_proxy() {
     echo "$dest"
     return
   fi
-  echo "Downloading c2w-net-proxy.wasm ${C2W_VERSION}..."
+  echo "Downloading c2w-net-proxy.wasm ${C2W_VERSION}..." >&2
   curl -fsSL \
     "https://github.com/${C2W_REPO}/releases/download/${C2W_VERSION}/c2w-net-proxy.wasm" \
     -o "$dest"
@@ -58,7 +58,7 @@ build_browser_wasi_shim() {
     echo "$shim_dir"
     return
   fi
-  echo "Building browser_wasi_shim..."
+  echo "Building browser_wasi_shim..." >&2
   mkdir -p "$cache_root"
   docker buildx build \
     -f "$ROOT/web/shim/Dockerfile" \
