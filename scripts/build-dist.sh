@@ -269,6 +269,10 @@ cmd_release_zips() {
     exit 1
   fi
 
+  if [[ "$out_dir" != /* ]]; then
+    out_dir="$ROOT/$out_dir"
+  fi
+
   collect_instances_from_containers
   mkdir -p "$out_dir"
 
