@@ -18,10 +18,6 @@ normalize_name() {
   echo "$1" | tr '[:upper:]' '[:lower:]' | tr ' ' '-'
 }
 
-product_title() {
-  echo "$1" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2); print}'
-}
-
 install_c2w() {
   local bin_dir="$ROOT/.cache/c2w"
   mkdir -p "$bin_dir"
@@ -189,7 +185,7 @@ main() {
     raw_name="$(basename "$dir")"
     dir_name="$(normalize_name "$raw_name")"
     tag="webcode-$dir_name"
-    title="$(product_title "$dir_name")"
+    title="$raw_name"
     assemble_product "$dir_name" "$tag" "$title" "$dir" "$proxy_wasm" "$shim_dir"
   done
 
