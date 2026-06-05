@@ -11,6 +11,9 @@ case "$ARCH" in
   *) echo "Unsupported architecture: $ARCH" >&2; exit 1 ;;
 esac
 
+declare -a INSTANCE_IDS=()
+declare -a INSTANCE_TITLES=()
+
 normalize_name() {
   echo "$1" | tr '[:upper:]' '[:lower:]' | tr ' ' '-'
 }
@@ -64,6 +67,73 @@ build_browser_wasi_shim() {
   echo "$shim_dir"
 }
 
+render_template() {
+  local template="$1"
+  local output="$2"
+  shift 2
+  local content
+  content="$(<"$template")"
+  while [[ $# -ge 2 ]]; do
+    local key="$1"
+    local val="$2"
+    content="${content//${key}/${val}}"
+    shift 2
+  done
+  mkdir -p "$(dirname "$output")"
+  printf '%s' "$content" > "$output"
+}
+
+copy_shared_assets() {
+  mkdir -p "$ROOT/dist/shared"
+  cp -R "$ROOT/web/shared/." "$ROOT/dist/shared/"
+  cp "$ROOT/web/shared/sw.js" "$ROOT/dist/sw.js"
+}
+
+generate_instances_json() {
+  local json="["
+  local first=true
+  local i
+  for i in "${!INSTANCE_IDS[@]}"; do
+    if [[ "$first" == true ]]; then
+      first=false
+    else
+      json+=","
+    fi
+    json+="{\"id\":\"${INSTANCE_IDS[$i]}\",\"title\":\"${INSTANCE_TITLES[$i]}\",\"path\":\"/${INSTANCE_IDS[$i]}/\"}"
+  done
+  json+="]"
+  printf '%s\n' "$json" > "$ROOT/dist/instances.json"
+}
+
+generate_root_index() {
+  local list_html=""
+  local i
+  for i in "${!INSTANCE_IDS[@]}"; do
+    list_html+="<li class=\"win95-list-item\"><a class=\"win95-list-link\" href=\"/${INSTANCE_IDS[$i]}/\">${INSTANCE_TITLES[$i]}</a></li>"
+  done
+  render_template \
+    "$ROOT/web/template/root-index.html" \
+    "$ROOT/dist/index.html" \
+    "{{INSTANCE_LIST}}" "$list_html"
+}
+
+generate_flush_pages() {
+  render_template \
+    "$ROOT/web/template/flush.html" \
+    "$ROOT/dist/flush/index.html" \
+    "{{FLUSH_SCOPE}}" "all" \
+    "{{FLUSH_REDIRECT}}" "/"
+
+  local i
+  for i in "${!INSTANCE_IDS[@]}"; do
+    render_template \
+      "$ROOT/web/template/flush.html" \
+      "$ROOT/dist/${INSTANCE_IDS[$i]}/flush/index.html" \
+      "{{FLUSH_SCOPE}}" "${INSTANCE_IDS[$i]}" \
+      "{{FLUSH_REDIRECT}}" "/${INSTANCE_IDS[$i]}/"
+  done
+}
+
 assemble_product() {
   local name="$1"
   local tag="$2"
@@ -80,7 +150,14 @@ assemble_product() {
   cp -R "$ROOT/web/static/." "$out/"
   cp -R "$shim_dir/." "$out/browser_wasi_shim/"
   cp "$proxy_wasm" "$out/c2w-net-proxy.wasm"
-  sed "s/{{PRODUCT_NAME}}/$title/g" "$ROOT/web/template/index.html" > "$out/index.html"
+  render_template \
+    "$ROOT/web/template/index.html" \
+    "$out/index.html" \
+    "{{PRODUCT_NAME}}" "$title" \
+    "{{INSTANCE_ID}}" "$name"
+
+  INSTANCE_IDS+=("$name")
+  INSTANCE_TITLES+=("$title")
 }
 
 main() {
@@ -99,6 +176,7 @@ main() {
   rm -rf "$ROOT/dist"
   mkdir -p "$ROOT/dist"
   cp "$ROOT/web/template/_headers" "$ROOT/dist/_headers"
+  copy_shared_assets
 
   for dir in "$ROOT/containers"/*/; do
     local raw_name dir_name tag title
@@ -108,6 +186,10 @@ main() {
     title="$(product_title "$dir_name")"
     assemble_product "$dir_name" "$tag" "$title" "$proxy_wasm" "$shim_dir"
   done
+
+  generate_instances_json
+  generate_root_index
+  generate_flush_pages
 
   echo "Build complete. Products in dist/:"
   ls -1 "$ROOT/dist"

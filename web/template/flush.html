@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>重置镜像</title>
+  <link rel="stylesheet" href="/shared/win95.css">
+</head>
+<body class="win95-body">
+  <script src="/shared/win95.js"></script>
+  <script src="/shared/boot.js"></script>
+  <script>
+    WebCodeBoot.flushPage({
+      scope: "{{FLUSH_SCOPE}}",
+      redirect: "{{FLUSH_REDIRECT}}",
+    });
+  </script>
+</body>
+</html>

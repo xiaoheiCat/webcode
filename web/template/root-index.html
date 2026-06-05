@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Web Code</title>
+  <link rel="stylesheet" href="/shared/win95.css">
+</head>
+<body class="win95-body">
+  <div class="win95-desktop">
+    <div class="win95-window win95-home-window">
+      <div class="win95-titlebar">
+        <span class="win95-titlebar-text">Web Code</span>
+      </div>
+      <div class="win95-body-panel">
+        <div class="win95-home-title">Web Code</div>
+        <div class="win95-home-hint">选择一项以启动该编程 Agent...</div>
+        <ul class="win95-list" id="instance-list">
+          {{INSTANCE_LIST}}
+        </ul>
+      </div>
+    </div>
+  </div>
+  <script src="/shared/boot.js"></script>
+  <script>
+    WebCodeBoot.registerServiceWorker();
+  </script>
+</body>
+</html>

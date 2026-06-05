@@ -1,0 +1,231 @@
+/* Windows 95-like UI */
+@font-face {
+  font-family: "Win95";
+  src: local("Tahoma"), local("MS Sans Serif"), local("Arial");
+}
+
+:root {
+  --win95-bg: #c0c0c0;
+  --win95-dark: #808080;
+  --win95-darker: #404040;
+  --win95-light: #ffffff;
+  --win95-highlight: #000080;
+  --win95-highlight-text: #ffffff;
+  --win95-btn-face: #c0c0c0;
+}
+
+* { box-sizing: border-box; }
+
+body.win95-body {
+  margin: 0;
+  font-family: "Win95", Tahoma, "MS Sans Serif", Arial, sans-serif;
+  font-size: 13px;
+  background: #008080;
+  color: #000;
+}
+
+/* Fullscreen overlay mask */
+.win95-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 16px;
+}
+
+.win95-overlay.hidden {
+  display: none;
+}
+
+/* Dialog window */
+.win95-window {
+  background: var(--win95-bg);
+  border: 2px solid;
+  border-color: var(--win95-light) var(--win95-darker) var(--win95-darker) var(--win95-light);
+  box-shadow: 1px 1px 0 #000;
+  min-width: 280px;
+  max-width: 420px;
+  width: 100%;
+}
+
+.win95-window.wide {
+  max-width: 520px;
+}
+
+.win95-titlebar {
+  background: linear-gradient(90deg, var(--win95-highlight), #1084d0);
+  color: var(--win95-highlight-text);
+  font-weight: bold;
+  padding: 3px 4px 3px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+}
+
+.win95-titlebar-text {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.win95-body-panel {
+  padding: 16px;
+}
+
+.win95-body-panel.with-icon {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.win95-icon {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  background: var(--win95-bg);
+  border: 2px solid;
+  border-color: var(--win95-dark) var(--win95-light) var(--win95-light) var(--win95-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.win95-message {
+  line-height: 1.45;
+  flex: 1;
+}
+
+.win95-progress-wrap {
+  margin-top: 12px;
+}
+
+.win95-progress-label {
+  margin-bottom: 6px;
+}
+
+.win95-progress-bar {
+  height: 20px;
+  background: var(--win95-light);
+  border: 2px solid;
+  border-color: var(--win95-dark) var(--win95-light) var(--win95-light) var(--win95-dark);
+  padding: 2px;
+  overflow: hidden;
+}
+
+.win95-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: repeating-linear-gradient(
+    90deg,
+    #000080 0px,
+    #000080 8px,
+    #1084d0 8px,
+    #1084d0 16px
+  );
+  transition: width 0.15s linear;
+}
+
+.win95-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 16px 16px;
+}
+
+.win95-btn {
+  font-family: inherit;
+  font-size: 13px;
+  min-width: 75px;
+  padding: 4px 12px;
+  background: var(--win95-btn-face);
+  border: 2px solid;
+  border-color: var(--win95-light) var(--win95-darker) var(--win95-darker) var(--win95-light);
+  cursor: default;
+}
+
+.win95-btn:active,
+.win95-btn.pressed {
+  border-color: var(--win95-darker) var(--win95-light) var(--win95-light) var(--win95-darker);
+  padding: 5px 11px 3px 13px;
+}
+
+.win95-btn:focus {
+  outline: 1px dotted #000;
+  outline-offset: -4px;
+}
+
+/* Home page */
+.win95-desktop {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 24px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.win95-home-window {
+  max-width: 480px;
+  width: 100%;
+}
+
+.win95-home-title {
+  font-size: 22px;
+  font-weight: bold;
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+.win95-home-hint {
+  color: #444;
+  margin-bottom: 12px;
+}
+
+.win95-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 2px solid;
+  border-color: var(--win95-dark) var(--win95-light) var(--win95-light) var(--win95-dark);
+  background: var(--win95-light);
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.win95-list-item {
+  border-bottom: 1px solid #dfdfdf;
+}
+
+.win95-list-item:last-child {
+  border-bottom: none;
+}
+
+.win95-list-link {
+  display: block;
+  padding: 6px 10px;
+  color: #000;
+  text-decoration: none;
+}
+
+.win95-list-link:hover,
+.win95-list-link:focus {
+  background: var(--win95-highlight);
+  color: var(--win95-highlight-text);
+  outline: none;
+}
+
+.win95-list-link::before {
+  content: "▶ ";
+  font-size: 10px;
+}
+
+@media (max-width: 480px) {
+  .win95-desktop { padding: 12px; }
+  .win95-home-title { font-size: 18px; }
+}
