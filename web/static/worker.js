@@ -1,5 +1,5 @@
 var __base = new URL(".", location.href).href;
-importScripts("https://cdn.jsdelivr.net/npm/xterm-pty@0.9.4/workerTools.js");
+importScripts(new URL("/shared/vendor/xterm-pty/workerTools.js", location.href).href);
 importScripts(__base + "browser_wasi_shim/index.js");
 importScripts(__base + "browser_wasi_shim/wasi_defs.js");
 importScripts(__base + "worker-util.js");
