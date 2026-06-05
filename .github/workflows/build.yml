@@ -3,12 +3,19 @@ name: Build WASM Terminals
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'dist/**'
   pull_request:
+    paths-ignore:
+      - 'dist/**'
   workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -24,8 +31,15 @@ jobs:
           C2W_VERSION: v0.8.4
         run: bash scripts/build-dist.sh
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist/
-          retention-days: 7
+      - name: Commit dist
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add dist/
+          if git diff --staged --quiet; then
+            echo "No changes to dist/"
+            exit 0
+          fi
+          git commit -m "build: update dist"
+          git push
