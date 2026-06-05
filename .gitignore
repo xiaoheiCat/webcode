@@ -1,6 +1,8 @@
 # Build output
 dist/
 release/
+docker/site/*
+!docker/site/.gitkeep
 
 # Build cache
 .cache/
