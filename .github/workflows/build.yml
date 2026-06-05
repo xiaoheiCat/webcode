@@ -18,18 +18,87 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  prepare:
     runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: docker/setup-buildx-action@v3
 
-      - name: Build dist
+      - name: Build shared deps
         env:
           DOCKER_BUILDKIT: 1
           C2W_VERSION: v0.8.4
-        run: bash scripts/build-dist.sh
+        run: bash scripts/build-dist.sh deps
+
+      - name: Set build matrix
+        id: set-matrix
+        run: echo "matrix=$(bash scripts/build-dist.sh matrix)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload build deps
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-deps
+          path: .cache/
+          retention-days: 1
+
+  build:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Download build deps
+        uses: actions/download-artifact@v4
+        with:
+          name: build-deps
+          path: .
+
+      - name: Build product
+        env:
+          DOCKER_BUILDKIT: 1
+          C2W_VERSION: v0.8.4
+        run: |
+          bash scripts/build-dist.sh product \
+            "${{ matrix.id }}" \
+            "${{ matrix.container }}" \
+            "${{ matrix.title }}"
+
+      - name: Upload product
+        uses: actions/upload-artifact@v4
+        with:
+          name: product-${{ matrix.id }}
+          path: dist/${{ matrix.id }}/
+          retention-days: 1
+
+  merge:
+    needs: [prepare, build]
+    runs-on: ubuntu-24.04
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && needs.build.result == 'success' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download products
+        uses: actions/download-artifact@v4
+        with:
+          pattern: product-*
+          path: _artifacts
+
+      - name: Merge dist
+        run: |
+          mkdir -p dist
+          for dir in _artifacts/product-*; do
+            id="$(basename "$dir" | sed 's/^product-//')"
+            mv "$dir" "dist/$id"
+          done
+          bash scripts/build-dist.sh merge
 
       - name: Commit dist
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'

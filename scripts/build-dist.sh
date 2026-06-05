@@ -63,6 +63,12 @@ build_browser_wasi_shim() {
   echo "$shim_dir"
 }
 
+ensure_build_deps() {
+  install_c2w
+  download_net_proxy >/dev/null
+  build_browser_wasi_shim >/dev/null
+}
+
 render_template() {
   local template="$1"
   local output="$2"
@@ -83,6 +89,18 @@ copy_shared_assets() {
   mkdir -p "$ROOT/dist/shared"
   cp -R "$ROOT/web/shared/." "$ROOT/dist/shared/"
   cp "$ROOT/web/shared/sw.js" "$ROOT/dist/sw.js"
+}
+
+collect_instances_from_containers() {
+  INSTANCE_IDS=()
+  INSTANCE_TITLES=()
+  local dir raw_name dir_name
+  for dir in "$ROOT/containers"/*/; do
+    raw_name="$(basename "$dir")"
+    dir_name="$(normalize_name "$raw_name")"
+    INSTANCE_IDS+=("$dir_name")
+    INSTANCE_TITLES+=("$raw_name")
+  done
 }
 
 generate_instances_json() {
@@ -135,7 +153,6 @@ assemble_product() {
   local tag="$2"
   local title="$3"
   local container_dir="$4"
-  local out="$ROOT/dist/$name"
   local proxy_wasm="$5"
   local shim_dir="$6"
 
@@ -143,6 +160,7 @@ assemble_product() {
   docker build -t "$tag" "$container_dir" >&2
 
   echo "Converting $tag -> dist/$name/out.wasm ..." >&2
+  local out="$ROOT/dist/$name"
   mkdir -p "$out"
   c2w "$tag" "$out/out.wasm"
 
@@ -156,23 +174,99 @@ assemble_product() {
     "{{PRODUCT_NAME}}" "$title" \
     "{{INSTANCE_ID}}" "$name"
 
-  INSTANCE_IDS+=("$name")
-  INSTANCE_TITLES+=("$title")
-
   echo "Cleaning up Docker data for $tag ..." >&2
   docker rmi -f "$tag" 2>/dev/null || true
   docker builder prune -af 2>/dev/null || true
   docker system prune -af 2>/dev/null || true
 }
 
-main() {
+print_matrix() {
+  local json='{"include":['
+  local first=true
+  local dir raw_name dir_name
+  for dir in "$ROOT/containers"/*/; do
+    raw_name="$(basename "$dir")"
+    dir_name="$(normalize_name "$raw_name")"
+    if [[ "$first" == true ]]; then
+      first=false
+    else
+      json+=','
+    fi
+    json+="{\"id\":\"$dir_name\",\"title\":\"$raw_name\",\"container\":\"containers/$raw_name\"}"
+  done
+  json+=']}'
+  echo "$json"
+}
+
+cmd_deps() {
+  cd "$ROOT"
+  export DOCKER_BUILDKIT=1
+  ensure_build_deps
+  echo "Build deps ready in $ROOT/.cache" >&2
+}
+
+cmd_product() {
+  local name="$1"
+  local container_rel="$2"
+  local container_dir="$ROOT/$container_rel"
+  local title="${3:-}"
+
+  if [[ ! -d "$container_dir" ]]; then
+    echo "Container directory not found: $container_dir" >&2
+    exit 1
+  fi
+  if [[ -z "$title" ]]; then
+    title="$(basename "$container_dir")"
+  fi
+
   cd "$ROOT"
   export DOCKER_BUILDKIT=1
 
   install_c2w
-  local proxy_wasm
+  local proxy_wasm shim_dir
   proxy_wasm="$(download_net_proxy)"
-  local shim_dir
+  shim_dir="$(build_browser_wasi_shim)"
+
+  local tag="webcode-$name"
+  mkdir -p "$ROOT/dist"
+  assemble_product "$name" "$tag" "$title" "$container_dir" "$proxy_wasm" "$shim_dir"
+  echo "Product dist/$name ready" >&2
+}
+
+cmd_merge() {
+  cd "$ROOT"
+  mkdir -p "$ROOT/dist"
+  cp "$ROOT/web/template/_headers" "$ROOT/dist/_headers"
+  copy_shared_assets
+
+  collect_instances_from_containers
+
+  local i missing=false
+  for i in "${!INSTANCE_IDS[@]}"; do
+    if [[ ! -d "$ROOT/dist/${INSTANCE_IDS[$i]}" ]]; then
+      echo "Missing product artifact: dist/${INSTANCE_IDS[$i]}" >&2
+      missing=true
+    fi
+  done
+  if [[ "$missing" == true ]]; then
+    exit 1
+  fi
+
+  generate_instances_json
+  generate_root_index
+  generate_flush_pages
+
+  echo "Merge complete. Products in dist/:"
+  ls -1 "$ROOT/dist"
+}
+
+cmd_all() {
+  cd "$ROOT"
+  export DOCKER_BUILDKIT=1
+
+  install_c2w
+  local proxy_wasm shim_dir
+  proxy_wasm="$(download_net_proxy)"
   shim_dir="$(build_browser_wasi_shim)"
 
   rm -rf "$ROOT/dist"
@@ -180,13 +274,18 @@ main() {
   cp "$ROOT/web/template/_headers" "$ROOT/dist/_headers"
   copy_shared_assets
 
-  for dir in "$ROOT/containers"/*/; do
-    local raw_name dir_name tag title
-    raw_name="$(basename "$dir")"
-    dir_name="$(normalize_name "$raw_name")"
-    tag="webcode-$dir_name"
-    title="$raw_name"
-    assemble_product "$dir_name" "$tag" "$title" "$dir" "$proxy_wasm" "$shim_dir"
+  collect_instances_from_containers
+
+  local i
+  for i in "${!INSTANCE_IDS[@]}"; do
+    local tag="webcode-${INSTANCE_IDS[$i]}"
+    assemble_product \
+      "${INSTANCE_IDS[$i]}" \
+      "$tag" \
+      "${INSTANCE_TITLES[$i]}" \
+      "$ROOT/containers/${INSTANCE_TITLES[$i]}" \
+      "$proxy_wasm" \
+      "$shim_dir"
   done
 
   generate_instances_json
@@ -195,6 +294,41 @@ main() {
 
   echo "Build complete. Products in dist/:"
   ls -1 "$ROOT/dist"
+}
+
+usage() {
+  cat >&2 <<EOF
+Usage: $(basename "$0") [command]
+
+Commands:
+  all                          Build every product into dist/ (default)
+  matrix                       Print GitHub Actions matrix JSON
+  deps                         Download/build shared c2w + shim deps
+  product <id> <container> [title]
+                               Build a single product into dist/<id>/
+  merge                        Merge dist/<id>/ dirs + generate index pages
+EOF
+  exit 1
+}
+
+main() {
+  local cmd="${1:-all}"
+  case "$cmd" in
+    all) cmd_all ;;
+    matrix) print_matrix ;;
+    deps) cmd_deps ;;
+    product)
+      shift
+      [[ $# -ge 2 ]] || usage
+      cmd_product "$1" "$2" "${3:-}"
+      ;;
+    merge) cmd_merge ;;
+    -h|--help|help) usage ;;
+    *)
+      echo "Unknown command: $cmd" >&2
+      usage
+      ;;
+  esac
 }
 
 main "$@"
