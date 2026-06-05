@@ -4,8 +4,15 @@ importScripts(__base + "browser_wasi_shim/index.js");
 importScripts(__base + "browser_wasi_shim/wasi_defs.js");
 importScripts(__base + "worker-util.js");
 importScripts(__base + "wasi-util.js");
+importScripts(__base + "fs-bridge.js");
+
+var workspaceConfig = { mode: "memory" };
 
 onmessage = (msg) => {
+    if (msg.data && msg.data.type === "configure") {
+        workspaceConfig = msg.data.workspace || { mode: "memory" };
+        return;
+    }
     if (serveIfInitMsg(msg)) {
         return;
     }
@@ -15,6 +22,7 @@ onmessage = (msg) => {
         resp['arrayBuffer']().then((wasm) => {
             recvCert().then((cert) => {
                 var certDir = getCertDir(cert);
+                var workspaceDir = buildWorkspaceDir(workspaceConfig);
                 var fds = [
                     undefined, // 0: stdin
                     undefined, // 1: stdout
@@ -22,6 +30,7 @@ onmessage = (msg) => {
                     certDir,   // 3: certificates dir
                     undefined, // 4: socket listenfd
                     undefined, // 5: accepted socket fd
+                    workspaceDir, // 6: /workspace
                 ];
                 var args = ['arg0', '--net=socket=listenfd=4', '--mac', genmac()];
                 var env = [
@@ -70,7 +79,6 @@ function wasiHack(wasi, ttyClient, connfd) {
             buffer.setUint32(nread_ptr, nread, true);
             return 0;
         } else {
-            console.log("fd_read: unknown fd " + fd);
             return _fd_read.apply(wasi.wasiImport, [fd, iovs_ptr, iovs_len, nread_ptr]);
         }
         return ERRNO_INVAL;
@@ -94,7 +102,6 @@ function wasiHack(wasi, ttyClient, connfd) {
             buffer.setUint32(nwritten_ptr, wtotal, true);
             return 0;
         } else {
-            console.log("fd_write: unknown fd " + fd);
             return _fd_write.apply(wasi.wasiImport, [fd, iovs_ptr, iovs_len, nwritten_ptr]);
         }
         return ERRNO_INVAL;
@@ -115,7 +122,6 @@ function wasiHack(wasi, ttyClient, connfd) {
         for (let sub of in_) {
             if (sub.u.tag.variant == "fd_read") {
                 if ((sub.u.data.fd != 0) && (sub.u.data.fd != connfd)) {
-                    console.log("poll_oneoff: unknown fd " + sub.u.data.fd);
                     return ERRNO_INVAL;
                 }
                 if (sub.u.data.fd == 0) {
@@ -132,7 +138,6 @@ function wasiHack(wasi, ttyClient, connfd) {
                     clockSub = sub;
                 }
             } else {
-                console.log("poll_oneoff: unknown variant " + sub.u.tag.variant);
                 return ERRNO_INVAL;
             }
         }

@@ -29,6 +29,7 @@
 <body>
   <div id="terminal"></div>
   <script src="/shared/win95.js"></script>
+  <script src="/shared/workspace.js"></script>
   <script src="/shared/boot.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
@@ -47,10 +48,11 @@
         "stack.js",
         "worker-util.js",
         "wasi-util.js",
+        "fs-bridge.js",
         "browser_wasi_shim/index.js",
         "browser_wasi_shim/wasi_defs.js",
       ],
-      init: function () {
+      init: function (workspace) {
         var base = new URL(".", location.href).href;
         var wasmUrl = base + "out.wasm";
         var proxyWasmUrl = base + "c2w-net-proxy.wasm";
@@ -88,6 +90,13 @@
         xterm.loadAddon(master);
 
         var worker = new Worker(new URL("./worker.js", location.href));
+        worker.postMessage({
+          type: "configure",
+          workspace: {
+            mode: workspace.mode,
+            shared: workspace.fsShared || null,
+          },
+        });
         var stackWorker = new Worker(new URL("./stack-worker.js", location.href));
         var nwStack = newStack(worker, wasmUrl, stackWorker, proxyWasmUrl);
         new TtyServer(slave).start(worker, nwStack);

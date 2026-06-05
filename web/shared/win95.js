@@ -82,48 +82,92 @@
   }
 
   function showConfirmDialog(opts) {
-    var win = createWindow(opts.title || "确认", true);
-    var panel = document.createElement("div");
-    panel.className = "win95-body-panel with-icon";
-    panel.innerHTML =
-      '<div class="win95-icon">⚠</div>' +
-      '<div class="win95-message"></div>';
-    panel.querySelector(".win95-message").textContent = opts.message || "";
-    win.appendChild(panel);
+    return new Promise(function (resolve) {
+      var win = createWindow(opts.title || "确认", true);
+      var panel = document.createElement("div");
+      panel.className = "win95-body-panel with-icon";
+      panel.innerHTML =
+        '<div class="win95-icon">⚠</div>' +
+        '<div class="win95-message"></div>';
+      panel.querySelector(".win95-message").textContent = opts.message || "";
+      win.appendChild(panel);
 
-    var buttons = document.createElement("div");
-    buttons.className = "win95-buttons";
-    var yesBtn = createButton(opts.yesLabel || "是 (Y)", true);
-    var noBtn = createButton(opts.noLabel || "否 (N)", false);
-    buttons.appendChild(yesBtn);
-    buttons.appendChild(noBtn);
-    win.appendChild(buttons);
+      var buttons = document.createElement("div");
+      buttons.className = "win95-buttons";
+      var yesBtn = createButton(opts.yesLabel || "是 (Y)", true);
+      var noBtn = createButton(opts.noLabel || "否 (N)", false);
+      buttons.appendChild(yesBtn);
+      buttons.appendChild(noBtn);
+      win.appendChild(buttons);
 
-    showOverlay(win);
+      showOverlay(win);
 
-    function cleanup() {
-      hideOverlay();
-      document.removeEventListener("keydown", onKey);
-    }
-
-    function onKey(e) {
-      if (e.key === "y" || e.key === "Y") {
-        cleanup();
-        if (opts.onYes) opts.onYes();
-      } else if (e.key === "n" || e.key === "N" || e.key === "Escape") {
-        cleanup();
-        if (opts.onNo) opts.onNo();
+      function cleanup() {
+        hideOverlay();
+        document.removeEventListener("keydown", onKey);
       }
-    }
 
-    document.addEventListener("keydown", onKey);
-    yesBtn.addEventListener("click", function () {
-      cleanup();
-      if (opts.onYes) opts.onYes();
+      function onKey(e) {
+        if (e.key === "y" || e.key === "Y") {
+          cleanup();
+          resolve(true);
+        } else if (e.key === "n" || e.key === "N" || e.key === "Escape") {
+          cleanup();
+          resolve(false);
+        }
+      }
+
+      document.addEventListener("keydown", onKey);
+      yesBtn.addEventListener("click", function () {
+        cleanup();
+        resolve(true);
+      });
+      noBtn.addEventListener("click", function () {
+        cleanup();
+        resolve(false);
+      });
     });
-    noBtn.addEventListener("click", function () {
-      cleanup();
-      if (opts.onNo) opts.onNo();
+  }
+
+  function showChoiceDialog(opts) {
+    return new Promise(function (resolve) {
+      var win = createWindow(opts.title || "选择", true);
+      var panel = document.createElement("div");
+      panel.className = "win95-body-panel with-icon";
+      panel.innerHTML =
+        '<div class="win95-icon">📁</div>' +
+        '<div class="win95-message"></div>';
+      panel.querySelector(".win95-message").textContent = opts.message || "";
+      win.appendChild(panel);
+
+      var buttons = document.createElement("div");
+      buttons.className = "win95-buttons";
+      var choiceBtns = [];
+      (opts.choices || []).forEach(function (choice, idx) {
+        var btn = createButton(choice.label, idx === 0);
+        btn.addEventListener("click", function () {
+          cleanup();
+          resolve(choice.value);
+        });
+        choiceBtns.push(btn);
+        buttons.appendChild(btn);
+      });
+      win.appendChild(buttons);
+      showOverlay(win);
+
+      function cleanup() {
+        hideOverlay();
+        document.removeEventListener("keydown", onKey);
+      }
+
+      function onKey(e) {
+        if (e.key === "Escape") {
+          cleanup();
+          resolve(null);
+        }
+      }
+
+      document.addEventListener("keydown", onKey);
     });
   }
 
@@ -132,5 +176,6 @@
     hideOverlay: hideOverlay,
     showProgressDialog: showProgressDialog,
     showConfirmDialog: showConfirmDialog,
+    showChoiceDialog: showChoiceDialog,
   };
 })(window);

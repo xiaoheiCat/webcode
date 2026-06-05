@@ -114,33 +114,55 @@
   }
 
   function start(opts) {
-    var progress = Win95.showProgressDialog(
-      opts.productName || "Web Code",
-      "正在准备 Web Code 虚拟机..."
-    );
-
-    return registerServiceWorker()
-      .then(waitForServiceWorker)
-      .then(function () {
-        return preloadAssets(opts.base, opts.assets, function (pct) {
-          progress.setProgress(pct * 100);
-        });
+    return WebCodeWorkspace.pickWorkspace(opts.productName)
+      .then(function (workspace) {
+        if (workspace.mode === "host") {
+          return WebCodeWorkspace.createHostFsWorker(workspace.handle).then(function (fs) {
+            workspace.fsWorker = fs.worker;
+            workspace.fsShared = fs.shared;
+            return workspace;
+          });
+        }
+        return workspace;
       })
-      .then(function () {
-        progress.setProgress(100);
-        progress.close();
-        return opts.init();
+      .then(function (workspace) {
+        var progress = Win95.showProgressDialog(
+          opts.productName || "Web Code",
+          "正在准备 Web Code 虚拟机..."
+        );
+        return registerServiceWorker()
+          .then(waitForServiceWorker)
+          .then(function () {
+            return preloadAssets(opts.base, opts.assets, function (pct) {
+              progress.setProgress(pct * 100);
+            });
+          })
+          .then(function () {
+            progress.setProgress(100);
+            progress.close();
+            return opts.init(workspace);
+          })
+          .catch(function (err) {
+            progress.close();
+            if (workspace.fsWorker) {
+              workspace.fsWorker.terminate();
+            }
+            Win95.showConfirmDialog({
+              title: "错误",
+              message: "资源加载失败：" + (err.message || err) + "\n请检查网络后重试。",
+              yesLabel: "重试",
+              noLabel: "返回",
+            }).then(function (ok) {
+              if (ok) location.reload();
+              else location.href = "/";
+            });
+            throw err;
+          });
       })
       .catch(function (err) {
-        progress.close();
-        Win95.showConfirmDialog({
-          title: "错误",
-          message: "资源加载失败：" + (err.message || err) + "\n请检查网络后重试。",
-          yesLabel: "重试",
-          noLabel: "返回",
-          onYes: function () { location.reload(); },
-          onNo: function () { location.href = "/"; },
-        });
+        if (err && err.message === "cancelled") {
+          location.href = "/";
+        }
         throw err;
       });
   }
@@ -153,17 +175,19 @@
         "你确定要重置虚拟机的镜像吗？\n" +
         "下次将从头开始重新载入镜像。\n" +
         "推荐在遇到问题或者需要更新镜像时使用。",
-      onYes: function () {
+      yesLabel: "是 (Y)",
+      noLabel: "否 (N)",
+    }).then(function (ok) {
+      if (ok) {
         var loading = Win95.showProgressDialog("重置镜像", "正在清除缓存...");
         flushCaches(opts.scope).then(function () {
           loading.setProgress(100);
           loading.close();
           location.href = opts.redirect || "/";
         });
-      },
-      onNo: function () {
+      } else {
         location.href = opts.redirect || "/";
-      },
+      }
     });
   }
 
