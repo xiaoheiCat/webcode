@@ -167,9 +167,6 @@ assemble_product() {
   docker rmi -f "$tag" 2>/dev/null || true
   docker builder prune -af 2>/dev/null || true
   docker system prune -af 2>/dev/null || true
-  if [[ -n "${CI:-}" ]]; then
-    df -h / /var/lib/docker 2>/dev/null || df -h /
-  fi
 }
 
 main() {
