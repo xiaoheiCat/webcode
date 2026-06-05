@@ -1,3 +1,7 @@
+# Build output
+dist/
+release/
+
 # Build cache
 .cache/
 

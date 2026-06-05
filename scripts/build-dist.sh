@@ -260,6 +260,42 @@ cmd_merge() {
   ls -1 "$ROOT/dist"
 }
 
+cmd_release_zips() {
+  local out_dir="${1:-$ROOT/release}"
+  cd "$ROOT"
+
+  if [[ ! -f "$ROOT/dist/index.html" ]]; then
+    echo "dist/ is not merged; run merge first" >&2
+    exit 1
+  fi
+
+  collect_instances_from_containers
+  mkdir -p "$out_dir"
+
+  echo "Creating webcode-static.zip ..." >&2
+  (
+    cd "$ROOT/dist"
+    zip -rq "$out_dir/webcode-static.zip" \
+      _headers index.html instances.json sw.js shared flush
+  )
+
+  local id
+  for id in "${INSTANCE_IDS[@]}"; do
+    if [[ ! -d "$ROOT/dist/$id" ]]; then
+      echo "Missing product directory: dist/$id" >&2
+      exit 1
+    fi
+    echo "Creating webcode-${id}.zip ..." >&2
+    (
+      cd "$ROOT/dist"
+      zip -rq "$out_dir/webcode-${id}.zip" "$id"
+    )
+  done
+
+  echo "Release zips in $out_dir:"
+  ls -1 "$out_dir"/*.zip
+}
+
 cmd_all() {
   cd "$ROOT"
   export DOCKER_BUILDKIT=1
@@ -307,6 +343,7 @@ Commands:
   product <id> <container> [title]
                                Build a single product into dist/<id>/
   merge                        Merge dist/<id>/ dirs + generate index pages
+  release-zips [output-dir]    Package dist/ into webcode-*.zip for GitHub Release
 EOF
   exit 1
 }
@@ -323,6 +360,10 @@ main() {
       cmd_product "$1" "$2" "${3:-}"
       ;;
     merge) cmd_merge ;;
+    release-zips)
+      shift
+      cmd_release_zips "${1:-}"
+      ;;
     -h|--help|help) usage ;;
     *)
       echo "Unknown command: $cmd" >&2

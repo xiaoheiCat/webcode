@@ -3,11 +3,7 @@ name: Build WASM Terminals
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - 'dist/**'
   pull_request:
-    paths-ignore:
-      - 'dist/**'
   workflow_dispatch:
 
 concurrency:
@@ -88,7 +84,7 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  merge:
+  release:
     needs: [prepare, build]
     runs-on: ubuntu-24.04
     if: ${{ !cancelled() && needs.prepare.result == 'success' && needs.build.result == 'success' }}
@@ -110,15 +106,16 @@ jobs:
           done
           bash scripts/build-dist.sh merge
 
-      - name: Commit dist
+      - name: Package release zips
+        run: bash scripts/build-dist.sh release-zips release
+
+      - name: Publish GitHub Release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add dist/
-          if git diff --staged --quiet; then
-            echo "No changes to dist/"
-            exit 0
-          fi
-          git commit -m "build: update dist"
-          git push
+          tag="build-${{ github.run_id }}"
+          gh release create "$tag" \
+            --title "WebCode build ${tag}" \
+            --notes "Automated build from workflow run ${{ github.run_id }} (${{ github.sha }}). Download all webcode-*.zip assets, extract them into the same folder, and host that folder as static files. See README.md for details." \
+            release/*.zip
