@@ -10,5 +10,5 @@ RUN curl https://cursor.com/install -fsS | bash
 
 ENV PATH="/root/.local/bin:${PATH}"
 
-ENTRYPOINT ["agent"]
+ENTRYPOINT ["bash", "-c", "agent"]
 CMD []

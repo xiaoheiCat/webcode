@@ -8,5 +8,5 @@ WORKDIR /workspace
 
 RUN npm i -g opencode-ai
 
-ENTRYPOINT ["opencode"]
+ENTRYPOINT ["bash", "-c", "opencode"]
 CMD []
