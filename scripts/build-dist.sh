@@ -63,7 +63,7 @@ build_browser_wasi_shim() {
   docker buildx build \
     -f "$ROOT/web/shim/Dockerfile" \
     --output "type=local,dest=$cache_root" \
-    "$ROOT/web/shim"
+    "$ROOT/web/shim" >&2
   echo "$shim_dir"
 }
 
@@ -138,15 +138,19 @@ assemble_product() {
   local name="$1"
   local tag="$2"
   local title="$3"
+  local container_dir="$4"
   local out="$ROOT/dist/$name"
-  local proxy_wasm="$4"
-  local shim_dir="$5"
+  local proxy_wasm="$5"
+  local shim_dir="$6"
 
-  echo "Converting $tag -> dist/$name/out.wasm ..."
+  echo "Building Docker image $tag ..." >&2
+  docker build -t "$tag" "$container_dir" >&2
+
+  echo "Converting $tag -> dist/$name/out.wasm ..." >&2
   mkdir -p "$out"
   c2w "$tag" "$out/out.wasm"
 
-  echo "Assembling dist/$name ..."
+  echo "Assembling dist/$name ..." >&2
   cp -R "$ROOT/web/static/." "$out/"
   cp -R "$shim_dir/." "$out/browser_wasi_shim/"
   cp "$proxy_wasm" "$out/c2w-net-proxy.wasm"
@@ -158,6 +162,14 @@ assemble_product() {
 
   INSTANCE_IDS+=("$name")
   INSTANCE_TITLES+=("$title")
+
+  echo "Cleaning up Docker data for $tag ..." >&2
+  docker rmi -f "$tag" 2>/dev/null || true
+  docker builder prune -af 2>/dev/null || true
+  docker system prune -af 2>/dev/null || true
+  if [[ -n "${CI:-}" ]]; then
+    df -h / /var/lib/docker 2>/dev/null || df -h /
+  fi
 }
 
 main() {
@@ -170,9 +182,6 @@ main() {
   local shim_dir
   shim_dir="$(build_browser_wasi_shim)"
 
-  echo "Building Docker images..."
-  (cd "$ROOT/containers" && bash build-all.sh)
-
   rm -rf "$ROOT/dist"
   mkdir -p "$ROOT/dist"
   cp "$ROOT/web/template/_headers" "$ROOT/dist/_headers"
@@ -184,7 +193,7 @@ main() {
     dir_name="$(normalize_name "$raw_name")"
     tag="webcode-$dir_name"
     title="$(product_title "$dir_name")"
-    assemble_product "$dir_name" "$tag" "$title" "$proxy_wasm" "$shim_dir"
+    assemble_product "$dir_name" "$tag" "$title" "$dir" "$proxy_wasm" "$shim_dir"
   done
 
   generate_instances_json
