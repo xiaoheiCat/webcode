@@ -16,6 +16,7 @@
   function buildPackInfo() {
     var info = "t:" + Math.round(Date.now() / 1000) + "\n";
     info += "n:" + genMac() + "\n";
+    info += "m: workspace\n";
     info += "m: .wasmenv\n";
     info += "env: SSL_CERT_FILE=/.wasmenv/proxy.crt\n";
     info += "env: https_proxy=http://192.168.127.253:80\n";
@@ -70,7 +71,7 @@
       });
   }
 
-  function startEmscripten(base, slave, fitTerminal) {
+  function startEmscripten(base, slave, fitTerminal, workspace) {
     var outUrl = assetUrl(base, "out.js");
     var Module = {
       pty: slave,
@@ -96,6 +97,7 @@
             mod.FS.mkdir("/.wasmenv");
           } catch (e) {}
           mod.FS.writeFile("/.wasmenv/proxy.crt", cert);
+          WebCodeEmscriptenHostFs.setupWorkspace(mod, workspace);
           writePackInfo(mod, info);
         });
 

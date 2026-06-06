@@ -29,20 +29,21 @@
 <body>
   <div id="terminal"></div>
   <script src="/shared/win95.js"></script>
+  <script src="/shared/workspace.js"></script>
   <script src="/shared/boot.js"></script>
   <script src="/shared/vendor/xterm/xterm.min.js"></script>
   <script src="/shared/vendor/xterm/addon-fit.min.js"></script>
   <script src="/shared/vendor/xterm-pty/index.js"></script>
   <script src="./stack.js"></script>
+  <script src="/shared/emscripten-host-fs.js"></script>
   <script src="/shared/emscripten-boot.js"></script>
   <script>
     WebCodeBoot.start({
       instanceId: "{{INSTANCE_ID}}",
       productName: "{{PRODUCT_NAME}}",
-      skipWorkspace: true,
       base: new URL(".", location.href).href,
       assets: {{PRELOAD_ASSETS}},
-      init: function () {
+      init: function (workspace) {
         var base = new URL(".", location.href).href;
 
         var xterm = new Terminal({
@@ -74,7 +75,7 @@
 
         WebCodeBoot.enableVmUnloadGuard();
 
-        WebCodeEmscripten.startEmscripten(base, slave, fitTerminal)
+        WebCodeEmscripten.startEmscripten(base, slave, fitTerminal, workspace)
           .then(function () {
             fitTerminal();
             xterm.focus();

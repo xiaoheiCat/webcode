@@ -9,7 +9,7 @@ WORKDIR /workspace
 RUN npm i -g @anthropic-ai/claude-code
 
 COPY env.sh /tmp
-RUN chmod +x /tmp/env.sh
+RUN chmod +x /tmp/env.sh && echo '{"hasCompletedOnboarding": true}' > ~/.claude.json
 
 ENTRYPOINT ["bash", "-c", "source /tmp/env.sh && rm -f /tmp/env.sh && claude"]
 CMD []
