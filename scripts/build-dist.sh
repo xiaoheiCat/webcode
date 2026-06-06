@@ -145,17 +145,63 @@ generate_flush_pages() {
   done
 }
 
+validate_emscripten_staging() {
+  local staging="$1"
+  local missing=false
+
+  if [[ ! -f "$staging/out.js" ]]; then
+    echo "Missing c2w --to-js artifact: $staging/out.js" >&2
+    missing=true
+  fi
+  if [[ ! -f "$staging/arg-module.js" ]]; then
+    echo "Missing c2w --to-js artifact: $staging/arg-module.js" >&2
+    missing=true
+  fi
+  if ! find "$staging" -maxdepth 3 -type f -name '*.wasm' | grep -q .; then
+    echo "Missing c2w --to-js artifact: no .wasm under $staging" >&2
+    missing=true
+  fi
+  if [[ "$missing" == true ]]; then
+    echo "c2w --to-js produced:" >&2
+    find "$staging" -type f | sort >&2 || true
+    exit 1
+  fi
+}
+
 copy_emscripten_runtime() {
   local staging="$1"
   local out="$2"
-  local file
-  for file in out.js out.wasm out.data arg-module.js; do
-    if [[ ! -f "$staging/$file" ]]; then
-      echo "Missing c2w --to-js artifact: $staging/$file" >&2
-      exit 1
+  validate_emscripten_staging "$staging"
+  cp -R "$staging"/. "$out/"
+}
+
+build_preload_assets_json() {
+  local staging="$1"
+  local json='['
+  local first=true
+  local path rel
+
+  while IFS= read -r path; do
+    rel="${path#"$staging"/}"
+    if [[ "$first" == true ]]; then
+      first=false
+    else
+      json+=','
     fi
-    cp "$staging/$file" "$out/$file"
+    json+="\"${rel//\"/\\\"}\""
+  done < <(find "$staging" -type f ! -name '.DS_Store' | LC_ALL=C sort)
+
+  for rel in stack.js stack-worker.js c2w-net-proxy.wasm; do
+    if [[ "$first" == true ]]; then
+      first=false
+    else
+      json+=','
+    fi
+    json+="\"$rel\""
   done
+
+  json+=']'
+  printf '%s' "$json"
 }
 
 assemble_product() {
@@ -178,6 +224,8 @@ assemble_product() {
 
   echo "Assembling dist/$name ..." >&2
   copy_emscripten_runtime "$staging" "$out"
+  local preload_assets
+  preload_assets="$(build_preload_assets_json "$staging")"
   rm -rf "$staging"
   cp "$ROOT/web/static/stack.js" "$out/stack.js"
   cp "$ROOT/web/static/stack-worker.js" "$out/stack-worker.js"
@@ -186,7 +234,8 @@ assemble_product() {
     "$ROOT/web/template/index.html" \
     "$out/index.html" \
     "{{PRODUCT_NAME}}" "$title" \
-    "{{INSTANCE_ID}}" "$name"
+    "{{INSTANCE_ID}}" "$name" \
+    "{{PRELOAD_ASSETS}}" "$preload_assets"
 
   echo "Cleaning up Docker data for $tag ..." >&2
   docker rmi -f "$tag" 2>/dev/null || true

@@ -111,6 +111,8 @@
     var weights = assets.map(function (a) {
       if (/\.data$/i.test(a)) return 30;
       if (/\.wasm$/i.test(a)) return 10;
+      if (/^load\//.test(a) || /-load\.js$/i.test(a)) return 5;
+      if (/^out\.js$/i.test(a)) return 3;
       return 1;
     });
     var totalWeight = weights.reduce(function (s, w) { return s + w; }, 0);

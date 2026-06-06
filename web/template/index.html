@@ -41,15 +41,7 @@
       productName: "{{PRODUCT_NAME}}",
       skipWorkspace: true,
       base: new URL(".", location.href).href,
-      assets: [
-        "out.js",
-        "out.wasm",
-        "out.data",
-        "arg-module.js",
-        "c2w-net-proxy.wasm",
-        "stack.js",
-        "stack-worker.js",
-      ],
+      assets: {{PRELOAD_ASSETS}},
       init: function () {
         var base = new URL(".", location.href).href;
 
