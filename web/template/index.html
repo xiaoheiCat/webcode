@@ -56,6 +56,12 @@
         xterm.loadAddon(fitAddon);
         xterm.open(document.getElementById("terminal"));
 
+        var pty = openpty();
+        var master = pty.master;
+        var slave = pty.slave;
+
+        xterm.loadAddon(master);
+
         function fitTerminal() {
           try { fitAddon.fit(); } catch (e) {}
         }
@@ -66,21 +72,11 @@
           window.visualViewport.addEventListener("scroll", fitTerminal);
         }
 
-        var pty = openpty();
-        var master = pty.master;
-        var slave = pty.slave;
-
-        var termios = slave.ioctl("TCGETS");
-        termios.iflag &= ~(ISTRIP | INLCR | IGNCR | ICRNL | IXON);
-        termios.oflag &= ~(OPOST);
-        termios.lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
-        slave.ioctl("TCSETS", new Termios(termios.iflag, termios.oflag, termios.cflag, termios.lflag, termios.cc));
-        xterm.loadAddon(master);
-
         WebCodeBoot.enableVmUnloadGuard();
 
-        WebCodeEmscripten.startEmscripten(base, slave, fitAddon)
+        WebCodeEmscripten.startEmscripten(base, slave, fitTerminal)
           .then(function () {
+            fitTerminal();
             xterm.focus();
           })
           .catch(function (err) {

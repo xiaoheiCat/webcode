@@ -27,31 +27,6 @@
     return info;
   }
 
-  function installPtyPoll(Module, slave) {
-    var readableCallbacks = [];
-    slave.onReadable(function () {
-      readableCallbacks.forEach(function (cb) { cb(); });
-      readableCallbacks = [];
-    });
-    Module.preRun.push(function (mod) {
-      mod.TTY.stream_ops.poll = function (stream, timeout, notifyCallback) {
-        if (Module.pty.readable) {
-          return 1;
-        }
-        if (notifyCallback != null) {
-          notifyCallback.registerCleanupFunc(function () {
-            var i = readableCallbacks.indexOf(notifyCallback);
-            if (i !== -1) {
-              readableCallbacks.splice(i, 1);
-            }
-          });
-          readableCallbacks.push(notifyCallback);
-        }
-        return 0;
-      };
-    });
-  }
-
   function writePackInfo(mod, info) {
     try {
       mod.FS.mkdir("/pack");
@@ -95,7 +70,7 @@
       });
   }
 
-  function startEmscripten(base, slave, fitAddon) {
+  function startEmscripten(base, slave, fitTerminal) {
     var outUrl = assetUrl(base, "out.js");
     var Module = {
       pty: slave,
@@ -109,8 +84,6 @@
       },
     };
     global.Module = Module;
-
-    installPtyPoll(Module, slave);
 
     var info = buildPackInfo();
     var proxyWasm = assetUrl(base, "c2w-net-proxy.wasm");
@@ -126,10 +99,14 @@
           writePackInfo(mod, info);
         });
 
+        if (fitTerminal) {
+          try { fitTerminal(); } catch (e) {}
+        }
+
         bootEmscriptenModule(base, Module)
           .then(function (instance) {
-            if (fitAddon) {
-              try { fitAddon.fit(); } catch (e) {}
+            if (fitTerminal) {
+              try { fitTerminal(); } catch (e) {}
             }
             resolve(instance);
           })
