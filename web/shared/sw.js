@@ -1,4 +1,4 @@
-var CACHE_PREFIX = "webcode-v1";
+var CACHE_PREFIX = "webcode-v2-emscripten";
 
 self.addEventListener("install", function () {
   self.skipWaiting();
@@ -49,10 +49,15 @@ function deleteCachesMatching(scope) {
     var toDelete;
     if (scope === "all") {
       toDelete = keys.filter(function (k) {
-        return k.indexOf(CACHE_PREFIX) === 0;
+        return k.indexOf("webcode-v") === 0;
       });
     } else {
-      toDelete = [CACHE_PREFIX + "-" + scope, CACHE_PREFIX + "-global"];
+      toDelete = [
+        CACHE_PREFIX + "-" + scope,
+        CACHE_PREFIX + "-global",
+        "webcode-v1-" + scope,
+        "webcode-v1-global",
+      ];
     }
     return Promise.all(
       toDelete.map(function (key) {

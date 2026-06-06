@@ -161,6 +161,14 @@ validate_emscripten_staging() {
     echo "Missing c2w --to-js artifact: no .wasm under $staging" >&2
     missing=true
   fi
+  if [[ ! -f "$staging/load.js" ]] && [[ ! -d "$staging/load" ]]; then
+    echo "Missing c2w --to-js artifact: load.js or load/ directory" >&2
+    missing=true
+  fi
+  if ! find "$staging" -type f -name '*.data' | grep -q .; then
+    echo "Missing c2w --to-js artifact: no .data file under $staging" >&2
+    missing=true
+  fi
   if [[ "$missing" == true ]]; then
     echo "c2w --to-js produced:" >&2
     find "$staging" -type f | sort >&2 || true
@@ -221,6 +229,9 @@ assemble_product() {
   echo "Converting $tag -> dist/$name (c2w --to-js) ..." >&2
   mkdir -p "$out"
   c2w --to-js "$tag" "$staging/"
+
+  echo "c2w --to-js artifacts:" >&2
+  find "$staging" -type f | sort | sed 's|^|  |' >&2
 
   echo "Assembling dist/$name ..." >&2
   copy_emscripten_runtime "$staging" "$out"

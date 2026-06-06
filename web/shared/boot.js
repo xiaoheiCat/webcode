@@ -68,74 +68,83 @@
     window.removeEventListener("beforeunload", onBeforeUnload);
   }
 
-  function fetchWithProgress(url, onItemProgress) {
+  function preloadOneAsset(url, state, report) {
     return fetch(url, { credentials: "same-origin" }).then(function (resp) {
       if (!resp.ok) {
         throw new Error("Failed to fetch " + url + ": " + resp.status);
       }
-      var total = Number(resp.headers.get("Content-Length")) || 0;
-      if (!resp.body || !total) {
+
+      var contentLength = Number(resp.headers.get("Content-Length")) || 0;
+      if (contentLength > 0) {
+        state.total = contentLength;
+      }
+
+      if (!resp.body) {
         return resp.arrayBuffer().then(function (buf) {
-          onItemProgress(1);
-          return buf;
+          state.loaded = buf.byteLength;
+          if (!state.total) {
+            state.total = buf.byteLength;
+          }
+          state.done = true;
+          report();
         });
       }
+
       var reader = resp.body.getReader();
-      var received = 0;
-      var chunks = [];
 
       function pump() {
         return reader.read().then(function (result) {
           if (result.done) {
-            onItemProgress(1);
-            var out = new Uint8Array(received);
-            var offset = 0;
-            for (var i = 0; i < chunks.length; i++) {
-              out.set(chunks[i], offset);
-              offset += chunks[i].length;
+            if (!state.total) {
+              state.total = state.loaded;
             }
-            return out.buffer;
+            state.done = true;
+            report();
+            return;
           }
-          chunks.push(result.value);
-          received += result.value.length;
-          onItemProgress(received / total);
+          state.loaded += result.value.length;
+          report();
           return pump();
         });
       }
+
+      report();
       return pump();
     });
   }
 
   function preloadAssets(base, assets, onProgress) {
-    var sizes = assets.map(function () { return 0; });
-    var weights = assets.map(function (a) {
-      if (/\.data$/i.test(a)) return 30;
-      if (/\.wasm$/i.test(a)) return 10;
-      if (/^load\//.test(a) || /-load\.js$/i.test(a)) return 5;
-      if (/^out\.js$/i.test(a)) return 3;
-      return 1;
+    var states = assets.map(function () {
+      return { loaded: 0, total: 0, done: false };
     });
-    var totalWeight = weights.reduce(function (s, w) { return s + w; }, 0);
 
     function report() {
       var loaded = 0;
-      for (var i = 0; i < assets.length; i++) {
-        loaded += weights[i] * sizes[i];
+      var total = 0;
+      var pendingUnknown = 0;
+
+      for (var i = 0; i < states.length; i++) {
+        loaded += states[i].loaded;
+        if (states[i].total > 0) {
+          total += states[i].total;
+        } else if (!states[i].done) {
+          pendingUnknown++;
+        } else {
+          total += states[i].loaded;
+        }
       }
-      onProgress(loaded / totalWeight);
+
+      if (total > 0) {
+        onProgress(Math.min(1, loaded / total));
+      } else if (pendingUnknown === 0 && states.length > 0) {
+        onProgress(1);
+      }
     }
 
-    var chain = Promise.resolve();
-    assets.forEach(function (asset, idx) {
-      chain = chain.then(function () {
-        var url = new URL(asset, base).href;
-        return fetchWithProgress(url, function (frac) {
-          sizes[idx] = frac;
-          report();
-        });
-      });
-    });
-    return chain;
+    return Promise.all(assets.map(function (asset, idx) {
+      var url = new URL(asset, base).href;
+      return preloadOneAsset(url, states[idx], report);
+    }));
   }
 
   function start(opts) {

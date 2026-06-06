@@ -3,6 +3,10 @@
 
   var STACK_ADDRESS = "http://localhost:9999/";
 
+  function assetUrl(base, path) {
+    return new URL(path, base).href;
+  }
+
   function genMac() {
     return "02:XX:XX:XX:XX:XX".replace(/X/g, function () {
       return "0123456789ABCDEF".charAt(Math.floor(Math.random() * 16));
@@ -55,13 +59,53 @@
     mod.FS.writeFile("/pack/info", info);
   }
 
+  function loadClassicScript(url) {
+    return new Promise(function (resolve, reject) {
+      var script = document.createElement("script");
+      script.src = url;
+      script.onload = function () { resolve(); };
+      script.onerror = function () {
+        reject(new Error("Failed to load script: " + url));
+      };
+      document.head.appendChild(script);
+    });
+  }
+
+  function loadLoadJsIfPresent(base) {
+    var loadUrl = assetUrl(base, "load.js");
+    return fetch(loadUrl, { method: "HEAD", credentials: "same-origin" }).then(function (resp) {
+      if (!resp.ok) {
+        return;
+      }
+      return loadClassicScript(loadUrl);
+    });
+  }
+
+  function bootEmscriptenModule(base, Module) {
+    var outUrl = assetUrl(base, "out.js");
+    return loadLoadJsIfPresent(base)
+      .then(function () {
+        return import(assetUrl(base, "arg-module.js"));
+      })
+      .then(function () {
+        return import(outUrl);
+      })
+      .then(function (initEmscriptenModule) {
+        return initEmscriptenModule.default(Module);
+      });
+  }
+
   function startEmscripten(base, slave, fitAddon) {
+    var outUrl = assetUrl(base, "out.js");
     var Module = {
       pty: slave,
       preRun: [],
-      mainScriptUrlOrBlob: base + "out.js",
+      mainScriptUrlOrBlob: outUrl,
       websocket: {
         url: STACK_ADDRESS,
+      },
+      locateFile: function (path) {
+        return assetUrl(base, path);
       },
     };
     global.Module = Module;
@@ -69,10 +113,11 @@
     installPtyPoll(Module, slave);
 
     var info = buildPackInfo();
-    var proxyWasm = base + "c2w-net-proxy.wasm";
+    var proxyWasm = assetUrl(base, "c2w-net-proxy.wasm");
+    var stackWorker = assetUrl(base, "stack-worker.js");
 
     return new Promise(function (resolve, reject) {
-      Stack.Start(STACK_ADDRESS, base + "stack-worker.js", proxyWasm, function (cert) {
+      Stack.Start(STACK_ADDRESS, stackWorker, proxyWasm, function (cert) {
         Module.preRun.push(function (mod) {
           try {
             mod.FS.mkdir("/.wasmenv");
@@ -81,23 +126,14 @@
           writePackInfo(mod, info);
         });
 
-        var argScript = document.createElement("script");
-        argScript.src = base + "arg-module.js";
-        argScript.onload = function () {
-          import(base + "out.js")
-            .then(function (initEmscriptenModule) {
-              return initEmscriptenModule.default(Module);
-            })
-            .then(function (instance) {
-              if (fitAddon) {
-                try { fitAddon.fit(); } catch (e) {}
-              }
-              resolve(instance);
-            })
-            .catch(reject);
-        };
-        argScript.onerror = reject;
-        document.head.appendChild(argScript);
+        bootEmscriptenModule(base, Module)
+          .then(function (instance) {
+            if (fitAddon) {
+              try { fitAddon.fit(); } catch (e) {}
+            }
+            resolve(instance);
+          })
+          .catch(reject);
       });
     });
   }
