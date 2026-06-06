@@ -29,33 +29,29 @@
 <body>
   <div id="terminal"></div>
   <script src="/shared/win95.js"></script>
-  <script src="/shared/workspace.js"></script>
   <script src="/shared/boot.js"></script>
   <script src="/shared/vendor/xterm/xterm.min.js"></script>
   <script src="/shared/vendor/xterm/addon-fit.min.js"></script>
   <script src="/shared/vendor/xterm-pty/index.js"></script>
   <script src="./stack.js"></script>
+  <script src="/shared/emscripten-boot.js"></script>
   <script>
     WebCodeBoot.start({
       instanceId: "{{INSTANCE_ID}}",
       productName: "{{PRODUCT_NAME}}",
+      skipWorkspace: true,
       base: new URL(".", location.href).href,
       assets: [
+        "out.js",
         "out.wasm",
+        "out.data",
+        "arg-module.js",
         "c2w-net-proxy.wasm",
-        "worker.js",
-        "stack-worker.js",
         "stack.js",
-        "worker-util.js",
-        "wasi-util.js",
-        "fs-bridge.js",
-        "browser_wasi_shim/index.js",
-        "browser_wasi_shim/wasi_defs.js",
+        "stack-worker.js",
       ],
-      init: function (workspace) {
+      init: function () {
         var base = new URL(".", location.href).href;
-        var wasmUrl = base + "out.wasm";
-        var proxyWasmUrl = base + "c2w-net-proxy.wasm";
 
         var xterm = new Terminal({
           cursorBlink: true,
@@ -89,21 +85,25 @@
         slave.ioctl("TCSETS", new Termios(termios.iflag, termios.oflag, termios.cflag, termios.lflag, termios.cc));
         xterm.loadAddon(master);
 
-        var worker = new Worker(new URL("./worker.js", location.href));
-        worker.postMessage({
-          type: "configure",
-          workspace: {
-            mode: workspace.mode,
-            shared: workspace.fsShared || null,
-          },
-        });
-        var stackWorker = new Worker(new URL("./stack-worker.js", location.href));
-        var nwStack = newStack(worker, wasmUrl, stackWorker, proxyWasmUrl);
-        new TtyServer(slave).start(worker, nwStack);
-
         WebCodeBoot.enableVmUnloadGuard();
 
-        xterm.focus();
+        WebCodeEmscripten.startEmscripten(base, slave, fitAddon)
+          .then(function () {
+            xterm.focus();
+          })
+          .catch(function (err) {
+            WebCodeBoot.disableVmUnloadGuard();
+            Win95.showConfirmDialog({
+              title: "错误",
+              message: "虚拟机启动失败：" + (err.message || err),
+              yesLabel: "重试",
+              noLabel: "返回",
+            }).then(function (ok) {
+              if (ok) location.reload();
+              else location.href = "/";
+            });
+          });
+
         document.addEventListener("click", function () { xterm.focus(); });
       },
     });

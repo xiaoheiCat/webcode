@@ -2,7 +2,7 @@
   "use strict";
 
   var SW_URL = "/sw.js";
-  var SW_VERSION = "webcode-v1";
+  var SW_VERSION = "webcode-v2-emscripten";
 
   function swSupported() {
     return "serviceWorker" in navigator;
@@ -109,7 +109,9 @@
   function preloadAssets(base, assets, onProgress) {
     var sizes = assets.map(function () { return 0; });
     var weights = assets.map(function (a) {
-      return /\.wasm$/i.test(a) ? 10 : 1;
+      if (/\.data$/i.test(a)) return 30;
+      if (/\.wasm$/i.test(a)) return 10;
+      return 1;
     });
     var totalWeight = weights.reduce(function (s, w) { return s + w; }, 0);
 
@@ -135,17 +137,20 @@
   }
 
   function start(opts) {
-    return WebCodeWorkspace.pickWorkspace(opts.productName)
-      .then(function (workspace) {
-        if (workspace.mode === "host") {
-          return WebCodeWorkspace.createHostFsWorker(workspace.handle).then(function (fs) {
-            workspace.fsWorker = fs.worker;
-            workspace.fsShared = fs.shared;
-            return workspace;
-          });
-        }
-        return workspace;
-      })
+    var workspacePromise = opts.skipWorkspace
+      ? Promise.resolve({ mode: "memory" })
+      : WebCodeWorkspace.pickWorkspace(opts.productName).then(function (workspace) {
+          if (workspace.mode === "host") {
+            return WebCodeWorkspace.createHostFsWorker(workspace.handle).then(function (fs) {
+              workspace.fsWorker = fs.worker;
+              workspace.fsShared = fs.shared;
+              return workspace;
+            });
+          }
+          return workspace;
+        });
+
+    return workspacePromise
       .then(function (workspace) {
         var progress = Win95.showProgressDialog(
           opts.productName || "Web Code",

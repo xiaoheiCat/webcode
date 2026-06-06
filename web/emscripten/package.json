@@ -1,0 +1,11 @@
+{
+  "name": "webcode-emscripten-net",
+  "private": true,
+  "dependencies": {
+    "@bjorn3/browser_wasi_shim": "^0.2.9"
+  },
+  "devDependencies": {
+    "webpack": "^5.89.0",
+    "webpack-cli": "^5.1.4"
+  }
+}

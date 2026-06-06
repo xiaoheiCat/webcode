@@ -47,26 +47,23 @@ download_net_proxy() {
   echo "$dest"
 }
 
-build_browser_wasi_shim() {
-  local cache_root="$ROOT/.cache/browser_wasi_shim"
-  local shim_dir="$cache_root/browser_wasi_shim"
-  if [[ -f "$shim_dir/index.js" && -f "$shim_dir/wasi_defs.js" ]]; then
-    echo "$shim_dir"
-    return
-  fi
-  echo "Building browser_wasi_shim..." >&2
-  mkdir -p "$cache_root"
-  docker buildx build \
-    -f "$ROOT/web/shim/Dockerfile" \
-    --output "type=local,dest=$cache_root" \
-    "$ROOT/web/shim" >&2
-  echo "$shim_dir"
+build_emscripten_bundles() {
+  echo "Building emscripten network bundles..." >&2
+  (
+    cd "$ROOT/web/emscripten"
+    if [[ -f package-lock.json ]]; then
+      npm ci --no-audit --no-fund
+    else
+      npm install --no-audit --no-fund
+    fi
+    npx webpack --mode production
+  )
 }
 
 ensure_build_deps() {
   install_c2w
   download_net_proxy >/dev/null
-  build_browser_wasi_shim >/dev/null
+  build_emscripten_bundles
 }
 
 render_template() {
@@ -148,25 +145,42 @@ generate_flush_pages() {
   done
 }
 
+copy_emscripten_runtime() {
+  local staging="$1"
+  local out="$2"
+  local file
+  for file in out.js out.wasm out.data arg-module.js; do
+    if [[ ! -f "$staging/$file" ]]; then
+      echo "Missing c2w --to-js artifact: $staging/$file" >&2
+      exit 1
+    fi
+    cp "$staging/$file" "$out/$file"
+  done
+}
+
 assemble_product() {
   local name="$1"
   local tag="$2"
   local title="$3"
   local container_dir="$4"
   local proxy_wasm="$5"
-  local shim_dir="$6"
 
   echo "Building Docker image $tag ..." >&2
   docker build -t "$tag" "$container_dir" >&2
 
-  echo "Converting $tag -> dist/$name/out.wasm ..." >&2
   local out="$ROOT/dist/$name"
+  local staging
+  staging="$(mktemp -d)"
+
+  echo "Converting $tag -> dist/$name (c2w --to-js) ..." >&2
   mkdir -p "$out"
-  c2w "$tag" "$out/out.wasm"
+  c2w --to-js "$tag" "$staging/"
 
   echo "Assembling dist/$name ..." >&2
-  cp -R "$ROOT/web/static/." "$out/"
-  cp -R "$shim_dir/." "$out/browser_wasi_shim/"
+  copy_emscripten_runtime "$staging" "$out"
+  rm -rf "$staging"
+  cp "$ROOT/web/static/stack.js" "$out/stack.js"
+  cp "$ROOT/web/static/stack-worker.js" "$out/stack-worker.js"
   cp "$proxy_wasm" "$out/c2w-net-proxy.wasm"
   render_template \
     "$ROOT/web/template/index.html" \
@@ -223,13 +237,13 @@ cmd_product() {
   export DOCKER_BUILDKIT=1
 
   install_c2w
-  local proxy_wasm shim_dir
+  build_emscripten_bundles
+  local proxy_wasm
   proxy_wasm="$(download_net_proxy)"
-  shim_dir="$(build_browser_wasi_shim)"
 
   local tag="webcode-$name"
   mkdir -p "$ROOT/dist"
-  assemble_product "$name" "$tag" "$title" "$container_dir" "$proxy_wasm" "$shim_dir"
+  assemble_product "$name" "$tag" "$title" "$container_dir" "$proxy_wasm"
   echo "Product dist/$name ready" >&2
 }
 
@@ -305,9 +319,9 @@ cmd_all() {
   export DOCKER_BUILDKIT=1
 
   install_c2w
-  local proxy_wasm shim_dir
+  build_emscripten_bundles
+  local proxy_wasm
   proxy_wasm="$(download_net_proxy)"
-  shim_dir="$(build_browser_wasi_shim)"
 
   rm -rf "$ROOT/dist"
   mkdir -p "$ROOT/dist"
@@ -324,8 +338,7 @@ cmd_all() {
       "$tag" \
       "${INSTANCE_TITLES[$i]}" \
       "$ROOT/containers/${INSTANCE_TITLES[$i]}" \
-      "$proxy_wasm" \
-      "$shim_dir"
+      "$proxy_wasm"
   done
 
   generate_instances_json
@@ -343,7 +356,7 @@ Usage: $(basename "$0") [command]
 Commands:
   all                          Build every product into dist/ (default)
   matrix                       Print GitHub Actions matrix JSON
-  deps                         Download/build shared c2w + shim deps
+  deps                         Download c2w + build emscripten network bundles
   product <id> <container> [title]
                                Build a single product into dist/<id>/
   merge                        Merge dist/<id>/ dirs + generate index pages

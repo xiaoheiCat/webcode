@@ -38,8 +38,10 @@ jobs:
       - name: Restore build deps cache
         uses: actions/cache@v4
         with:
-          path: .cache
-          key: webcode-deps-${{ env.C2W_VERSION }}-${{ hashFiles('web/shim/Dockerfile', 'web/shim/**') }}
+          path: |
+            .cache
+            web/emscripten/node_modules
+          key: webcode-deps-${{ env.C2W_VERSION }}-${{ hashFiles('web/emscripten/**') }}
           restore-keys: |
             webcode-deps-${{ env.C2W_VERSION }}-
 
@@ -62,8 +64,10 @@ jobs:
       - name: Restore build deps cache
         uses: actions/cache@v4
         with:
-          path: .cache
-          key: webcode-deps-${{ env.C2W_VERSION }}-${{ hashFiles('web/shim/Dockerfile', 'web/shim/**') }}
+          path: |
+            .cache
+            web/emscripten/node_modules
+          key: webcode-deps-${{ env.C2W_VERSION }}-${{ hashFiles('web/emscripten/**') }}
           restore-keys: |
             webcode-deps-${{ env.C2W_VERSION }}-
 
